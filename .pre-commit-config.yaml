@@ -1,0 +1,13 @@
+# Runs before every commit. Install once with: pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.8.1
+    hooks:
+      - id: nbstripout          # clears every notebook's outputs, so no data values get committed
+  - repo: local
+    hooks:
+      - id: no-data-files
+        name: block data files
+        entry: python scripts/check_no_data.py
+        language: system
+        pass_filenames: true

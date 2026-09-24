@@ -1,0 +1,22 @@
+# Weavve data never goes into this repo (Prof's rule)
+data/*
+!data/README.md
+outputs/
+*.csv
+*.xlsx
+*.xls
+*.zip
+*.parquet
+*.pkl
+*.json
+!.vscode/*.json
+
+# Notebook and Python clutter
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Mac
+.DS_Store
