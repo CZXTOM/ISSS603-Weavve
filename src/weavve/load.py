@@ -76,16 +76,18 @@ def gsc_workbooks():
 
 
 def gsc_site_clicks():
-    """Monthly whole-site clicks from each workbook's Countries sheet, one row per (month, workbook)."""
+    """Monthly Singapore clicks from each workbook's Countries sheet, one row per (month, workbook)."""
     def build():
         rows = []
         for p in gsc_workbooks()[0]:
             c = pd.read_excel(p, sheet_name="Countries")
+            sg = c[c["Country"] == "Singapore"]        # some workbooks are not filtered to Singapore
+            row = sg.iloc[0] if len(sg) else c.iloc[0]
             for col in c.columns:
                 m = re.match(r"(\d+)/1/(\d+)\s*-\s*\d+/\d+/\d+\s*Clicks", str(col).strip())
                 if m:
                     month = pd.Timestamp(f"20{int(m.group(2)) % 100:02d}-{int(m.group(1)):02d}-01")
-                    rows.append({"month": month, "workbook": os.path.basename(p), "clicks": int(c[col].iloc[0])})
+                    rows.append({"month": month, "workbook": os.path.basename(p), "clicks": int(row[col])})
         return pd.DataFrame(rows)
     return _cached("gsc_site_clicks", build)
 
