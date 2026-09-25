@@ -27,6 +27,7 @@ Run from the `notebooks` folder, in this order.
 
 | Notebook | What it does | Who |
 |---|---|---|
+| `EDA_notebook` | Independently audits all 86 raw files, every sheet and every populated column before preprocessing; writes an aggregate-only column audit to `WEAVVE_OUT` | Shared |
 | `01_load_raw` | Reads every file once and caches it | Anyone, run first |
 | `02_data_checks` | Measures every data problem in the plan, saves `data_checks.json` | Shared |
 | `03_team_findings_check` | Reruns the team's first findings, raw and clean | Shared |
@@ -36,6 +37,8 @@ Run from the `notebooks` folder, in this order.
 | `13_clean_search` | Keywords by month, do-not-bid list | Search group |
 
 The 10 to 13 notebooks list their steps from the team plan. Fill in each step's code under its heading.
+
+`EDA_notebook` can run before the other notebooks. It reads the original files directly and does not use their cache or cleaning rules. If the historical Ads workbook is outside `WEAVVE_DATA`, set `WEAVVE_ADS` to its full path. Its source inventory expects the supplied 38 GSC workbooks and 43 Semrush CSVs; review the inventory if the export changes.
 
 ## Rules
 
