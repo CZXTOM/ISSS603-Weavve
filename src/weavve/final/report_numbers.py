@@ -154,66 +154,33 @@ def quotes(R, ads=None, log=None, plan=None):
     klav = V1["j_source_klaviyo_signup_new_website_buyers"]["jan_aug"]
     q["Table 13 buyers from the sign-up forms"] = f"fell from {klav['2024']} to {klav['2026']}"
 
-    # Section 7. Recommendation 1 (our version)
+    # Section 7. Recommendation 1 (our version): the sign-up route, counting only sign-ups who first buy 1 to 90 days
+    # after signing up
     sign = F["new_signups_website_order_within_90_days"]
-    sign_now, sign_2024 = sign["2026"]["pct"] / 100, sign["2024"]["pct"] / 100
+    sign_all_now = sign["2026"]["pct"] / 100
+    sign_now, sign_2024, sign_2023 = (sign[y]["later_pct"] / 100 for y in ("2026", "2024", "2023"))
     sign_plan = (sign_now + sign_2024) / 2
-    signups_year, starters_year = (
-        F["reach_2026"]["new_signups_a_year"],
-        F["reach_2026"]["shopee_starters_a_year"],
-    )
-    p_base = sum(base90) / len(base90) / 100
-    movers = F["shopee_starters_year1_value"]
-    lo, hi = (
-        F["mover_gain_year1"]["against_shopee_only_repeat"]["mean"],
-        F["mover_gain_year1"]["against_no_repeat"]["mean"],
-    )
+    signups_year = F["reach_2026"]["new_signups_a_year"]
     gain_lo, gain_hi = Y1["2024_website"] - Y1["2024_Shopee"], Y1["2025_website"] - Y1["2025_Shopee"]
-    extra_sign, extra_card = signups_year * (sign_plan - sign_now), starters_year * (0.025 - p_base)
-    sales_sign, sales_card = (extra_sign * gain_lo, extra_sign * gain_hi), (extra_card * lo, extra_card * hi)
-    shopee_month = V2["shopee_purchases_janaug_2026"] / (7 + 28 / 31)
-    parcels_year = shopee_month * 12
-    per_parcel = profit(sales_card[0]) / parcels_year
-    q["7.3 Sign-up buying, today to planned"] = (
-        f"from {100 * sign_now:.1f}% to {100 * sign_plan:.1f}% of new sign-ups"
+    extra_sign = signups_year * (sign_plan - sign_now)
+    sales_sign = (extra_sign * gain_lo, extra_sign * gain_hi)
+    q["7.3 Sign-up buying, all against later"] = (
+        f"{100 * sign_all_now:.1f}% bought on the website within 90 days, but only {100 * sign_now:.1f}% bought after"
     )
-    q["7.3 Movers spent"] = (
-        f"The {movers['website_order_within_90_days']['people']} Shopee buyers who moved on their own spent "
-        f"{money(movers['website_order_within_90_days']['mean'])}"
-    )
-    q["7.3 Others spent"] = (
-        f"spent {money(movers['shopee_only_repeat_within_90_days']['mean'])}, and those who did not spent "
-        f"{money(movers['no_repeat_within_90_days']['mean'])}"
-    )
-    q["7.3 Each moved buyer adds"] = f"each moved buyer adds {money(lo)} to {money(hi)}"
+    q["7.3 Later buying, today to planned"] = f"from {100 * sign_now:.1f}% to {100 * sign_plan:.1f}% of new sign-ups"
+    q["7.3 Later buying in 2023"] = f"The rate was {100 * sign_2023:.1f}% in 2023"
     q["Table 15 sign-ups a year"] = f"{signups_year:,} new sign-ups"
-    q["Table 15 new Shopee buyers a year"] = f"{starters_year:,} new Shopee buyers"
     q["Table 15 extra buyers, sign-up route"] = f"About {extra_sign:,.0f}"
-    q["Table 15 extra buyers, parcel card"] = f"About {extra_card:,.0f}"
     q["Table 15 sales, sign-up route"] = k_range(sales_sign)
     q["Table 15 profit, sign-up route"] = k_range([profit(v) for v in sales_sign])
-    q["Table 15 sales, parcel card"] = k_range(sales_card)
-    q["Table 15 profit, parcel card"] = k_range([profit(v) for v in sales_card])
-    q["Table 15 card pays if it costs under"] = f"${per_parcel:.2f} a parcel"
-    q["7.3 Shopee parcels a year"] = f"about {round(parcels_year, -2):,.0f} a year"
-    q["7.3 Profit per point of sign-up buying"] = (
+    q["7.3 Profit per point of later buying"] = (
         f"{k(signups_year * 0.01 * gain_lo * MARGIN)} to "
         f"{k(signups_year * 0.01 * gain_hi * MARGIN)} of profit"
     )
-    n_sign, n_card, n_emails = (
-        n_per_group(sign_now, sign_plan),
-        n_per_group(p_base, 0.025),
-        n_per_group(sign_plan, sign_2024),
-    )
+    n_emails, n_half = n_per_group(sign_now, sign_2024), n_per_group(sign_now, sign_plan)
     months_emails = 2 * n_emails / (signups_year / 12)
-    q["Table 16 test A size"] = (
-        f"{n_sign:,} sign-ups per side, about {2 * n_sign / (signups_year / 12):.0f} months"
-    )
-    q["Table 16 test C size"] = (
-        f"{n_card:,} parcels per group, about {2 * n_card / shopee_month:.0f} months at "
-        f"{shopee_month:.0f} Shopee purchases a month"
-    )
-    q["Table 16 test D size"] = f"{n_emails:,} sign-ups per side, about {months_emails:.0f} months"
+    q["Table 16 test C size"] = f"{n_emails:,} sign-ups per side, about {months_emails:.0f} months"
+    q["7.4 Months to confirm a half-way lift"] = f"would take about {2 * n_half / (signups_year / 12):.0f} months"
     q["9 Welcome-email test months"] = f"Months 4 to {3 + math.ceil(months_emails)}"
 
     # Sections 7.3 and 11. The margin: what Weavve's ad account counts as a conversion
@@ -303,6 +270,11 @@ def quotes(R, ads=None, log=None, plan=None):
     q["8.4 Break-even range"] = (
         f"breaks even at a margin of {100 * b['cost'] / b['sales']:.0f}% "
         f"to {100 * up['cost'] / up['sales']:.0f}%"
+    )
+    gap = TC["reward_ready_return_gap"]
+    q["11 Return gap behind Recommendation 2"] = (
+        f"members came back {gap['gap']:.1f} points more often than non-members, with a 95% range of "
+        f"{gap['ci95'][0]:.1f} to {gap['ci95'][1]:.1f} points"
     )
     q["8.4 Each 1,000 extra website buyers"] = (
         f"adds about {tens(profit(per1000['sales'], per1000['cost']))} more"

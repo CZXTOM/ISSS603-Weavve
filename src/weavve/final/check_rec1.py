@@ -88,7 +88,7 @@ res["mover_gain_year1"] = {
 web_dates = defaultdict(list)
 for p, os in people.items():
     web_dates[p] = [o["date"] for o in os if is_web(o)]
-signups, quarters = defaultdict(lambda: [0, 0]), defaultdict(lambda: [0, 0])
+signups, quarters = defaultdict(lambda: [0, 0, 0]), defaultdict(lambda: [0, 0])
 reach_2026 = 0
 for r in rows("J", "Subscribers"):
     d = day(r["Profile Created On"])
@@ -99,18 +99,25 @@ for r in rows("J", "Subscribers"):
         reach_2026 += 1
     if d + timedelta(days=90) > CUTOFF:
         continue
-    bought = int(bool(p) and any(d <= x <= d + timedelta(days=90) for x in web_dates.get(p, [])))
+    dates = web_dates.get(p, []) if p else []
+    bought = int(any(d <= x <= d + timedelta(days=90) for x in dates))
+    # Bought later: no website order on the day of sign-up, then one within 90 days. Most buyers sign up on the
+    # day they buy, to get the pop-up code, so welcome emails can only reach the later buyers.
+    later = int(bought and d not in dates)
     for s in (signups[d.year], quarters[f"{d.year} Q{(d.month - 1) // 3 + 1}"]):
         s[0] += 1
         s[1] += bought
+    signups[d.year][2] += later
 res["new_signups_website_order_within_90_days"] = {
     y: {
         "signups": n,
         "bought": b,
         "pct": round(100 * b / n, 1),
+        "bought_later": lt,
+        "later_pct": round(100 * lt / n, 1),
         "window": "profiles created 1 Jan to 30 May 2026" if y == 2026 else "full year",
     }
-    for y, (n, b) in sorted(signups.items())
+    for y, (n, b, lt) in sorted(signups.items())
 }
 # When the rate fell, to set against the sign-up reward failure in late 2025
 res["new_signups_by_quarter"] = {

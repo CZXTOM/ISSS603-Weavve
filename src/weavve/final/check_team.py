@@ -100,6 +100,19 @@ def gap_ci(a, b):
 res["back_within_a_year_after_7_days"] = {
     k: {"people": n, "pct": pct(b, n)} for k, (n, b) in sorted(back.items())
 }
+
+
+def share_gap(a, b):
+    """Difference in shares, a minus b, in points, with a 95% interval."""
+    (na, ba), (nb, bb) = a, b
+    pa, pb = ba / na, bb / nb
+    se = math.sqrt(pa * (1 - pa) / na + pb * (1 - pb) / nb)
+    return {"gap": round(100 * (pa - pb), 1), "ci95": [round(100 * (pa - pb - 1.96 * se), 1), round(100 * (pa - pb + 1.96 * se), 1)]}
+
+
+# Section 11: the return gain Recommendation 2 is sized on, members against non-members with a first order of
+# $200 or more, and whether it could be chance
+res["reward_ready_return_gap"] = share_gap(back["members_200_plus"], back["all_non_members_200_plus"])
 res["two_year_repeats"] = {
     k: {"returners": r, "repeat_orders_per_returner": round(n / r, 2), "net_per_repeat_order": round(s / n)}
     for k, (r, n, s, _) in two_year.items()
