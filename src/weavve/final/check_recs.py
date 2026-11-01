@@ -358,3 +358,74 @@ for label, test in (
         "full_year": dict(sorted(full.items())),
         "jan_aug": dict(sorted(ja.items())),
     }
+
+# Section 6.2: where website visits went. Google search clicks in Singapore, January to July, split by what people
+# searched for. Brand covers Weavve's name and its common misspellings. Product covers searches with a product
+# word. Query splits use the top queries Search Console lists for each month.
+import re  # noqa: E402
+
+from weavve.final.data import search_console  # noqa: E402
+
+BRAND = re.compile(r"weavv|wevve|weeave|weave ?home|^weave( singapore)?$", re.I)
+PRODUCT = re.compile(
+    r"sheet|duvet|comforter|pillow|bolster|tencel|lyocell|bamboo|cotton|blanket|mattress protector|towel|"
+    r"thread count|bedding|quilt|cover",
+    re.I,
+)
+gsc = search_console()
+search = {}
+for y in (2024, 2025):
+    months = [gsc[(y, m)] for m in range(1, 8) if (y, m) in gsc]
+    split = defaultdict(float)
+    for mo in months:
+        for q, c in mo["queries"].items():
+            split["brand" if BRAND.search(q) else "product" if PRODUCT.search(q) else "other"] += c
+    search[y] = {"months": len(months), "clicks": round(sum(mo["clicks"] for mo in months)), **{k: round(v) for k, v in split.items()}}
+results["search_clicks_janjul"] = search
+
+# Table 11 (Product dimension): two-year website sales per person by what the first website order held, first
+# website purchase 1 January 2023 to 31 August 2024. Each line's kind comes from File D's product type and category.
+# Packaging and non-stock lines are ignored. A person whose first order holds two or more kinds is "several kinds".
+
+
+def product_kind(d):
+    pt, cat = text(d["Product Types"]).lower(), text(d["Category"])
+    if cat in ("Accessories & Packaging", "Non-stock") or pt in ("insurance", "packing materials"):
+        return None
+    if pt in ("set", "bundle") and cat in ("1. Bedsheets", "6. Bundles"):
+        return "sheet_set"
+    if pt == "duvet":
+        return "duvet_insert"
+    if pt == "quilt":
+        return "weighted_blanket"
+    if pt in ("fitted sheet", "flat sheet", "cot sheet"):
+        return "fitted_or_flat_sheet"
+    if pt == "duvet cover":
+        return "duvet_cover"
+    if pt == "mattress protectors":
+        return "mattress_protector"
+    if pt in ("towel", "body exfoliator"):
+        return "towel_and_bath"
+    if pt in ("pillow case", "bolster") and cat == "1. Bedsheets":
+        return "pillow_or_bolster_case"
+    return "other"
+
+
+t11 = defaultdict(list)
+for p, os in web_people.items():
+    f = min(os, key=lambda o: (o["date"], o["order"]))
+    if not date(2023, 1, 1) <= f["date"] <= date(2024, 8, 31):
+        continue
+    skus = {
+        text(r["Product variant SKU at time of sale"])
+        for r in f["rows"]
+        if text(r["Order or sales reversal"]) == "order" and text(r["Line item ID"]) not in ("", "0")
+    } - {""}
+    kinds = {product_kind(D[s]) for s in skus if s in D} - {None}
+    group = "several_kinds" if len(kinds) > 1 else next(iter(kinds)) if kinds else "unclassified"
+    t11[group].append(sum(o["net"] for o in os if o["date"] <= f["date"] + timedelta(days=730)))
+t11_avg = sum(sum(v) for v in t11.values()) / sum(len(v) for v in t11.values())
+results["product_t11_groups"] = {
+    g: {"people": len(v), "sales_2y": round(sum(v) / len(v)), "index": round(100 * sum(v) / len(v) / t11_avg)}
+    for g, v in sorted(t11.items())
+}

@@ -102,6 +102,7 @@ res["snooze_inputs"] = {
     ),
     "first_order_200_plus_pct": round(100 * sum(f["net"] >= 200 for f in win) / n, 1),
     "first_order_80_plus_pct": round(100 * sum(f["net"] >= 80 for f in win) / n, 1),
+    "first_order_100_plus_pct": round(100 * sum(f["net"] >= 100 for f in win) / n, 1),
     "first_order_mean": round(sum(f["net"] for f in win) / n),
 }
 

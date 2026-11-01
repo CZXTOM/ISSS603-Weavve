@@ -212,3 +212,51 @@ def funnel_monthly():
                 }
             )
     return out
+
+
+@lru_cache(None)
+def search_console():
+    """File A: Google Search Console exports, one workbook per pair of months, Singapore only.
+
+    Returns {(year, month): {"clicks": Singapore clicks, "queries": {query: clicks}}}. Monthly totals come from the
+    Countries sheet. Query clicks are kept only when the workbook's own filter is Singapore, and they cover the top
+    queries Search Console lists, not every query.
+    """
+    books = []
+    for p in sorted(DATA.rglob("*.xlsx")):
+        if "A.SEO" in str(p):
+            books.append(p.read_bytes())
+    for z in sorted(DATA.rglob("*.zip")):
+        with ZipFile(z) as zf:
+            books += [zf.read(m) for m in sorted(zf.namelist()) if "/A.SEO" in m and m.endswith(".xlsx")]
+    out = {}
+    for data in books:
+        wb = openpyxl.load_workbook(BytesIO(data), read_only=True, data_only=True)
+        filters = {text(r[0]): text(r[1]) for r in wb["Filters"].iter_rows(values_only=True) if r and len(r) > 1}
+        countries = [tuple(r) for r in wb["Countries"].iter_rows(values_only=True)]
+        queries = [tuple(r) for r in wb["Queries"].iter_rows(values_only=True)]
+        wb.close()
+        sg = next((r for r in countries[1:] if r and r[0] == "Singapore"), None)
+        qhead = [text(h) for h in queries[0]]
+        for i, h in enumerate(countries[0]):
+            h = text(h)
+            parts = h.split(" ")
+            if not h.endswith(" Clicks") or "/" not in parts[0] or sg is None:
+                continue
+            month, _, year = parts[0].split("/")
+            key = (2000 + int(year), int(month))
+            if key in out:
+                continue
+            label = h[: -len(" Clicks")]
+            short = date(2000, int(month), 1).strftime("%b") + " Clicks"
+            j = next((k for k, q in enumerate(qhead) if q in (label + " Clicks", short)), None)
+            singapore = filters.get("Country") == "Singapore"
+            out[key] = {
+                "clicks": num(sg[i]) or 0.0,
+                "queries": {
+                    text(r[0]): num(r[j]) or 0.0
+                    for r in queries[1:]
+                    if singapore and j is not None and r and len(r) > j and text(r[0])
+                },
+            }
+    return out

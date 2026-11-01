@@ -8,25 +8,34 @@ Profit is extra net sales times the margin, minus any discount cost. The margin 
 Weavve's 1.5 floor on return on ad spend (report Section 7.3).
 """
 
-import json
 import math
 import re
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile
 
-from weavve.paths import DATA
-
 MARGIN = 1 / 1.5
 
-# The business team's Snooze Club plan [17]. Its four measured inputs are the team's own figures, so they stay in
-# data/ with the Weavve files (team_snooze_plan.json) and the repo holds none of them. The last two are rules of
-# the plan itself.
-TEAM_PLAN = DATA / "team_snooze_plan.json"
-SNOOZE_PLAN = {
-    **(json.loads(TEAM_PLAN.read_text(encoding="utf-8")) if TEAM_PLAN.exists() else {}),
-    "extra_off_first_order": 0.02,  # the club code takes 10% off the first order, against 8% for the pop-up
-    "reward_value": 12,  # the smallest reward, $12 off
+# Recommendation 2's two plan rules. Every other input is rebuilt from Weavve's files by snooze_plan().
+PLAN_RULES = {
+    "signup_points": 150,  # part 3 raises sign-up points from 50 to 150
+    "extra_off_first_order": 0.02,  # the club code takes 10% off a first order, against 8% for the pop-up
 }
+
+
+def snooze_plan(TC, V2):
+    """Recommendation 2's inputs: Weavve's own rates and reward rule, plus the two plan rules."""
+    reward = TC["smallest_reward"]
+    # With 150 sign-up points and 1 point per $1, a first order of $100 reaches the smallest reward
+    assert reward["points"] - PLAN_RULES["signup_points"] == 100
+    return {
+        **PLAN_RULES,
+        "join_with_part_2": TC["club_code_first_order"]["2023_h2"]["club_code_pct"] / 100,  # first full half year
+        "ready_with_part_3": V2["snooze_inputs"]["first_order_100_plus_pct"] / 100,  # first orders of $100+
+        "back_gain": TC["reward_ready_return_gap"]["gap"] / 100,  # members against non-members, $200+ first order
+        "rewards_used": TC["reward_ready_second_order"]["any_points_voucher_pct"] / 100,  # second orders with a voucher
+        "reward_value": reward["value"],
+        "reward_points": reward["points"],
+    }
 
 
 def money(v):
@@ -217,9 +226,8 @@ def quotes(R, ads=None, log=None, plan=None):
     q["8.1 Other 10% codes"] = (
         f"came back at {c10['weavve10off_200_plus']['pct']}% and {c10['whwa10oi_200_plus']['pct']}%"
     )
-    e = TC["file_e_codes_redeemed"]
-    q["Table 18 codes redeemed in 2025"] = (
-        f"redeemed {e['alia_2025']} of its codes and {e['club_signup_2025']} of the club's"
+    q["Table 18 pop-up code on first orders, 2026"] = (
+        f"{TC['first_order_codes_27apr_28aug_2026']['popup_pct']}% of new website customers used a pop-up code"
     )
     v = TC["vouchers_never_used_pct"]
     q["Table 18 vouchers never used"] = (
@@ -238,10 +246,12 @@ def quotes(R, ads=None, log=None, plan=None):
         TC["year1_repeat_sales_per_returner"],
     )
 
+    plan_snz = snooze_plan(TC, V2)
+
     def snooze(join_rate):
         members_now, members = new * join_now, new * join_rate
-        ready_now_n, ready = members_now * ready_now, members * SNOOZE_PLAN["ready_with_part_3"]
-        back = (ready - ready_now_n) * SNOOZE_PLAN["back_gain"]
+        ready_now_n, ready = members_now * ready_now, members * plan_snz["ready_with_part_3"]
+        back = (ready - ready_now_n) * plan_snz["back_gain"]
         return {
             "members_now": members_now,
             "members": members,
@@ -249,12 +259,11 @@ def quotes(R, ads=None, log=None, plan=None):
             "ready": ready,
             "back": back,
             "sales": back * per_returner,
-            "cost": (members - members_now) * SNOOZE_PLAN["extra_off_first_order"] * first
-            + (ready - ready_now_n) * SNOOZE_PLAN["rewards_used"] * SNOOZE_PLAN["reward_value"],
+            "cost": (members - members_now) * plan_snz["extra_off_first_order"] * first
+            + (ready - ready_now_n) * plan_snz["rewards_used"] * plan_snz["reward_value"],
         }
 
-    b, up = snooze(SNOOZE_PLAN["join_with_part_2"]), snooze(join_2024)
-    per1000 = {key: b[key] * 1000 / new for key in ("sales", "cost")}
+    b, up = snooze(plan_snz["join_with_part_2"]), snooze(join_2024)
     q["Table 20 join rate today"] = f"Join the club: {100 * join_now:.1f}% today"
     q["Table 20 reward in reach today"] = f"Members with a reward in reach: {100 * ready_now:.1f}% today"
     q["Table 20 members today"] = f"{b['members_now']:.0f}"
@@ -273,14 +282,108 @@ def quotes(R, ads=None, log=None, plan=None):
     )
     gap = TC["reward_ready_return_gap"]
     q["11 Return gap behind Recommendation 2"] = (
-        f"members came back {gap['gap']:.1f} points more often than non-members, with a 95% range of "
-        f"{gap['ci95'][0]:.1f} to {gap['ci95'][1]:.1f} points"
+        f"back {gap['gap']:.1f} points more often. That is the gap"
     )
-    q["8.4 Each 1,000 extra website buyers"] = (
-        f"adds about {tens(profit(per1000['sales'], per1000['cost']))} more"
+    q["11 Return gap range"] = f"range runs from {gap['ci95'][0]:.1f} to {gap['ci95'][1]:.1f} points"
+
+    # Sections 6.2, 6.4, 8.1 to 8.3 and 10.5: numbers added for Final v1
+    sc, src = V1["search_clicks_janjul"], F["new_signups_by_source"]
+    y1, y2 = src["sep2024_aug2025"], src["sep2025_aug2026"]
+    q["6.2 Google search clicks"] = (
+        f"rose from {sc['2024']['clicks'] / 1000:.1f}k to {sc['2025']['clicks'] / 1000:.1f}k"
+    )
+    q["6.2 Product search clicks"] = f"held at about {round(sc['2025']['product'], -2):,.0f}"
+    q["6.2 Other search clicks"] = f"rose from {sc['2024']['other']:,} to {sc['2025']['other']:,}"
+    q["6.2 Facebook and Instagram sign-ups"] = (
+        f"fell from {y1['facebook_instagram']:,} to {y2['facebook_instagram']:,}"
+    )
+    q["6.2 Google ad link sign-ups"] = (
+        f"Google ad links fell from {y1['google_ad_link']} to {y2['google_ad_link']}"
+    )
+    disc = TC["back_within_a_year_by_first_discount"]
+    q["6.4 Return by first-order discount"] = (
+        f"were {disc['discount']['pct']}% against {disc['full_price']['pct']}%"
+    )
+    q["6.4 Returners back within 90 days"] = (
+        f"{TC['returners_back_within_90_days_pct']:.0f}% do so within 90 days"
+    )
+    q["Table 17 club code, 2024"] = (
+        f"{TC['club_code_first_order']['2024_27apr_28aug']['club_code_pct']}% in the"
+    )
+    mr = TC["members_reward"]
+    q["Table 17 members who earn and use a reward"] = (
+        f"{mr['earn_smallest_reward_pct']}% earn the smallest reward but only {mr['ever_used_points_voucher_pct']}% ever use"
+    )
+    bk = TC["back_within_a_year_after_7_days"]
+    q["8.1 Members back within a year"] = (
+        f"{bk['members_200_plus']['pct']}%, against {bk['all_non_members_200_plus']['pct']}% for non-members"
+    )
+    ce = TC["file_e_codes_redeemed"]
+    q["Table 18 sign-up codes used, 2026"] = (
+        f"{ce['club_signup_2026_redeemed']} of the {ce['club_signup_2026_released']} sign-up codes"
+    )
+    rw = TC["smallest_reward"]
+    q["Table 18 smallest reward"] = f"The smallest reward, ${rw['value']} off, costs {rw['points']} points"
+    q["Table 18 weekend orders"] = (
+        f"{TC['weekend_share_of_website_orders']['2026']:.0f}% of website orders come on"
+    )
+    need = rw["points"] - plan_snz["signup_points"]
+    q["Table 19 part 3 reward"] = f"reaches the {rw['points']}-point, ${rw['value']} reward"
+    q["Table 19 part 3 first orders"] = (
+        f"{100 * plan_snz['ready_with_part_3']:.0f}% of first orders are ${need}"
+    )
+    q["Table 21 test A size"] = (
+        f"{n_per_group(join_now, plan_snz['join_with_part_2'])} new buyers per side"
+    )
+    q["10.5 Google search clicks rose"] = (
+        f"Google search clicks rose {100 * (sc['2025']['clicks'] / sc['2024']['clicks'] - 1):.0f}%"
     )
     q["Table 22 sign-up measure now"] = f"{100 * sign_now:.1f}%, sign-ups January to May 2026"
     q["Table 22 sign-up measure target"] = f"{100 * sign_plan:.1f}%, half way back to 2024"
+
+    # Coverage additions: every computed number in Part B that the sections above do not already quote
+    earlier = [L5[y]["sales_from_earlier_buyers"] for y in ("2023", "2024", "2025")]
+    q["Figure 5 sales from earlier buyers"] = f"between {k(min(earlier))} and {k(max(earlier))} a year"
+    t11, base = V1["product_t11_groups"], V1["product_t11_base"]
+    q["6.3 Several kinds, more than average"] = f"spent {t11['several_kinds']['index'] - 100}% more"
+    q["6.3 Table 11 caption, average"] = f"Index 100 is the average of {money(base['avg_2y_sales'])}"
+    q["6.3 Table 11 caption, people in groups"] = (
+        f"hold {base['people'] - t11['unclassified']['people']:,} of {base['people']:,} people"
+    )
+    q["6.3 Table 11 caption, unclassified"] = f"The other {t11['unclassified']['people']} bought"
+    for g, v in t11.items():
+        if g == "unclassified":
+            continue
+        q[f"Table 11 {g}, people"] = f"{v['people']:,}"
+        q[f"Table 11 {g}, sales"] = money(v["sales_2y"])
+        q[f"Table 11 {g}, index"] = str(v["index"])
+    q["Table 14 several kinds"] = f"worth {t11['several_kinds']['index'] - 100}% more over two years"
+    sq = F["new_signups_by_quarter"]
+    late = [v["pct"] for qq, v in sq.items() if qq >= "2025 Q2"]
+    q["Figure 6 recent level"] = f"to about {sum(late) / len(late):.0f}%"
+    q["Figure 6 starting level"] = f"The share fell from {sq['2024 Q1']['pct']:.0f}%"
+    q["7.3 Each extra buyer adds"] = f"adds {money(gain_lo)} to {money(gain_hi)}"
+    q["Table 19 club offer in early 2024"] = f"{100 * join_2024:.1f}% of new buyers used it"
+    q["Table 20 new website customers"] = f"{new:,}"
+    q["Table 20 join rate with part 2"] = f"{100 * plan_snz['join_with_part_2']:.1f}% with part 2"
+    q["Table 20 reward in reach with part 3"] = f"{100 * plan_snz['ready_with_part_3']:.1f}% with part 3"
+    q["Table 20 sales per returner"] = f"{money(per_returner)} for each"
+    q["8.4 Early-2024 join rate"] = f"early-2024 rate of {100 * join_2024:.1f}%"
+    q["Table 21 test A target"] = f"Joining rises toward {100 * plan_snz['join_with_part_2']:.1f}%"
+    q["Table 22 join target"] = f"{100 * plan_snz['join_with_part_2']:.1f}%"
+    q["Table 22 reward-ready target"] = f"{100 * plan_snz['ready_with_part_3']:.1f}%"
+    q["Table 22 join now"] = f"{100 * join_now:.1f}%, the year to 28 August 2026"
+    q["Table 22 reward-ready now"] = f"{100 * ready_now:.1f}%"
+    q["Table 22 return now"] = f"{L4['2025']['active_y1_pct_after_7_days']}%, 2025 starters"
+    q["Table 22 return target"] = f"{L4['2024']['active_y1_pct_after_7_days']}%, the 2024 level"
+    q["Table 20 return gain"] = f"{100 * plan_snz['back_gain']:.1f} points more often"
+    before = sum(sq[x]["signups"] for x in ("2024 Q1", "2024 Q2", "2024 Q3")) / 3
+    after = sum(sq[x]["signups"] for x in ("2025 Q1", "2025 Q2", "2025 Q3", "2025 Q4")) / 4
+    q["11 Sign-ups before and after Alia"] = (
+        f"about {round(before, -1):,.0f} and {round(after, -1):,.0f} a quarter"
+    )
+    co = [L5[y]["sales_all"] - L5[y]["sales_ex_company_osco"] for y in ("2024", "2025")]
+    q["11 Company and Osco accounts"] = f"bought about {k(co[0])} to {k(co[1])} a"
 
     # Section 10. Paid search, from the campaign snapshot when it is in the data folder
     if ads and log and plan:
@@ -347,6 +450,21 @@ def quotes(R, ads=None, log=None, plan=None):
             f"from about {r1[3]:.0f} to about {r2[3]:.0f}, and the click rate fell to {r2[2]:.1f}%"
         )
         q["Table 26 round 3"] = f"The click rate stayed at {r3[2]:.1f}%"
+        bph, fph = kwd[("buy bed sheets singapore", "PHRASE")], kwd[("fitted sheet", "PHRASE")]
+        q["Table 26 round 1, phrase keyword"] = f"earned {bph['clicks']} clicks from {bph['impressions']:,} views"
+        q["Table 26 round 2, phrase fitted sheet"] = f"earned {fph['clicks']} clicks from {fph['impressions']:,} views"
+        pph = kwd[("pillowcase", "PHRASE")]
+        tbs = kwd[("tencel bed sheets", "EXACT")]
+        q["10.2 tencel bed sheets clicks"] = f"Some of its {tbs['clicks']} clicks"
+        q["Table 26 round 3, phrase pillowcase"] = f"earned {pph['clicks']} click from {pph['impressions']} views"
+        groups = {g["name"]: g for g in ads["ad_groups"]}
+        for name in ("1 TENCEL", "2 Cotton", "3 Buy in Singapore", "4 Fitted and single", "5 Pillowcases"):
+            g = groups[name]
+            q[f"Table 25 {name}, views"] = f"{g['impressions']:,}"
+            q[f"Table 25 {name}, clicks"] = str(g["clicks"])
+            q[f"Table 25 {name}, click rate"] = f"{100 * g['clicks'] / g['impressions']:.1f}%"
+            q[f"Table 25 {name}, cost per click"] = f"S${g['cost'] / g['clicks']:.2f}"
+        q["Table 25 all, cost per click"] = f"S${C['cost'] / C['clicks']:.2f}"
     return q
 
 

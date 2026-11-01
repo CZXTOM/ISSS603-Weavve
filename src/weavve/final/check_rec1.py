@@ -119,6 +119,27 @@ res["new_signups_website_order_within_90_days"] = {
     }
     for y, (n, b, lt) in sorted(signups.items())
 }
+# Section 6.2: new sign-ups by where they came from (File J Initial Source), September to August. Facebook and
+# Instagram are counted together. "google" on its own is a tagged ad link. Other Google sources are search.
+def source(s):
+    s = s.lower()
+    if "facebook" in s or "instagram" in s or s in ("ig", "fb", "igshopping"):
+        return "facebook_instagram"
+    if s == "google":
+        return "google_ad_link"
+    return "other"
+
+
+by_source = defaultdict(lambda: defaultdict(int))
+for r in rows("J", "Subscribers"):
+    d = day(r["Profile Created On"])
+    p = text(r["person_id"])
+    if not d or d < date(2024, 9, 1) or d > CUTOFF or (p and p in first and first[p]["date"] < d):
+        continue
+    year = "sep2024_aug2025" if d < date(2025, 9, 1) else "sep2025_aug2026"
+    by_source[year][source(text(r["Initial Source"]))] += 1
+res["new_signups_by_source"] = {y: dict(v) for y, v in sorted(by_source.items())}
+
 # When the rate fell, to set against the sign-up reward failure in late 2025
 res["new_signups_by_quarter"] = {
     q: {"signups": n, "pct": round(100 * b / n, 1)} for q, (n, b) in sorted(quarters.items()) if q >= "2024"

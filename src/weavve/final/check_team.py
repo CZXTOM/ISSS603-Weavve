@@ -7,6 +7,7 @@ Run it through notebooks/05_final_report.ipynb.
 """
 
 import math
+import re
 import statistics
 from collections import defaultdict
 from datetime import date, timedelta
@@ -113,6 +114,28 @@ def share_gap(a, b):
 # Section 11: the return gain Recommendation 2 is sized on, members against non-members with a first order of
 # $200 or more, and whether it could be chance
 res["reward_ready_return_gap"] = share_gap(back["members_200_plus"], back["all_non_members_200_plus"])
+
+# Section 6.4: one-year return by the discount on the first website order, same starters and window. Members used
+# the club sign-up code. "Discount" is any other code or price reduction. The rest paid full price.
+by_disc = defaultdict(lambda: [0, 0])
+for p, f in win.items():
+    g = "members" if p in club else "discount" if codes(f) or f["discount"] > 0.005 else "full_price"
+    by_disc[g][0] += 1
+    by_disc[g][1] += int(any(f["date"] + timedelta(days=7) < o["date"] <= f["date"] + timedelta(days=365) for o in people[p]))
+res["back_within_a_year_by_first_discount"] = {g: {"people": n, "pct": pct(b, n)} for g, (n, b) in sorted(by_disc.items())}
+res["discount_against_full_price_gap"] = share_gap(by_disc["discount"], by_disc["full_price"])
+
+# Section 6.4: of website starters (January 2023 to 28 August 2024) who bought again within two years, the share
+# whose first repeat came within 90 days. Repeats count after the first 7 days.
+returned = within_90 = 0
+for p, f in starters.items():
+    if not date(2023, 1, 1) <= f["date"] <= date(2024, 8, 28):
+        continue
+    later = sorted(o["date"] for o in people[p] if f["date"] + timedelta(days=7) < o["date"] <= f["date"] + timedelta(days=730))
+    if later:
+        returned += 1
+        within_90 += int(later[0] <= f["date"] + timedelta(days=90))
+res["returners_back_within_90_days_pct"] = pct(within_90, returned)
 res["two_year_repeats"] = {
     k: {"returners": r, "repeat_orders_per_returner": round(n / r, 2), "net_per_repeat_order": round(s / n)}
     for k, (r, n, s, _) in two_year.items()
@@ -137,12 +160,23 @@ res["popup_code_first_order_2026"] = {
     "club_code_pct": pct(sum(any(c.startswith("LWC") for c in codes(f)) for f in coh26), len(coh26)),
 }
 
+# Table 18: share of new website customers, 27 April to 28 August 2026, whose first order used a pop-up code (codes
+# starting AL, and the WC8ALFR and WC10ALFR codes the pop-up emails an hour later) or the club sign-up code (LWC)
+coh = [f for f in starters.values() if date(2026, 4, 27) <= f["date"] <= CUTOFF]
+res["first_order_codes_27apr_28aug_2026"] = {
+    "people": len(coh),
+    "popup_pct": pct(sum(any(c.startswith(("AL", "WC8ALFR", "WC10ALFR")) for c in codes(f)) for f in coh), len(coh)),
+    "club_pct": pct(sum(any(c.startswith("LWC") for c in codes(f)) for f in coh), len(coh)),
+}
+
 # Table 18: pop-up against club sign-up codes, from Weavve's own code report in File E
 by_year = {(text(r["Group"]), int(r["Year"])): r for r in rows("E", "Discount by Year") if r["Year"]}
 res["file_e_codes_redeemed"] = {
     "alia_first_issued": min(text(r["First Issued"])[:10] for (g, _), r in by_year.items() if g == "Alia"),
     "alia_2025": int(by_year[("Alia", 2025)]["Codes Redeemed"]),
     "club_signup_2025": int(by_year[("Loyaltywelcome", 2025)]["Codes Redeemed"]),
+    "club_signup_2026_redeemed": int(by_year[("Loyaltywelcome", 2026)]["Codes Redeemed"]),
+    "club_signup_2026_released": int(by_year[("Loyaltywelcome", 2026)]["Codes Released"]),
 }
 
 # Table 18: weekend share of website orders
@@ -166,6 +200,13 @@ smallest_codes = {
     for r in F
     if text(r["discount_code"]).upper().startswith("WHLP") and r["points"] == -250
 }
+# Section 8: the smallest money-off reward members can swap points for, with its points and value (File F)
+money_off = [
+    (-int(r["points"]), int(re.search(r"\$(\d+)", text(r["description"])).group(1)))
+    for r in F
+    if text(r["discount_code"]).upper().startswith("WHLP") and r["points"] and re.search(r"\$\d+", text(r["description"]))
+]
+res["smallest_reward"] = dict(zip(("points", "value"), min(money_off)))
 made = defaultdict(lambda: [0, 0])
 for r in F:
     d = day(r["date"])
