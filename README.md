@@ -30,6 +30,7 @@ Run from the `notebooks` folder, in this order.
 | `01_load_raw` | Reads every file once and caches it | Anyone, run first |
 | `02_data_checks` | Measures every data problem in the plan, saves `data_checks.json` | Shared |
 | `03_team_findings_check` | Reruns the team's first findings, raw and clean | Shared |
+| `05_final_report` | Rebuilds the final report's Part B numbers and Figures 5 to 7, then checks them against the report | Shared |
 | `10_clean_customer` | Orders, customers, loyalty | Customer group |
 | `11_clean_product` | Products sold, missing codes | Product group |
 | `12_clean_promotion` | Discounts per line and order, campaign types | Promotion group |
@@ -51,5 +52,6 @@ The 10 to 13 notebooks list their steps from the team plan. Fill in each step's 
 data/          Weavve files, ignored by git (only the README is tracked)
 notebooks/     all analysis, outputs cleared
 src/weavve/    shared loaders and paths
+src/weavve/final/  the final report's checks, numbers and figures
 scripts/       the pre-commit data check
 ```
