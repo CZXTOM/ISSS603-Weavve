@@ -1,9 +1,7 @@
-"""Checks the business team's Snooze Club numbers in Part B against the raw files, claim by claim.
+"""Recompute existing analysis formulas from the verified shared cleaned dataset.
 
-Each check rebuilds the team's figure with the Part A rules and the hash-checked sources, so the report keeps
-only what holds. It reads File F for voucher dates and use only. No names or emails go into the output.
-
-Run it through notebooks/05_final_report.ipynb.
+Run through notebook 05. Observational comparisons and scenario assumptions
+remain distinct from causal evidence or validation of a report.
 """
 
 import math

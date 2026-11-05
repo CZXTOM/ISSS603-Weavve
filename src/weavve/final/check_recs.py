@@ -1,10 +1,7 @@
-"""Rebuilds the findings in Section 6 of the final report from Files C, D, G, J and K.
+"""Recompute existing analysis formulas from the verified shared cleaned dataset.
 
-weavve.final.data reads the files and checks each one against the report's copy. The checks apply the Part A
-rules. They leave out cancelled orders and repeated discount lines, and they keep refunds with their order.
-Orders with zero or negative net sales do not count as purchases.
-
-Run it through notebooks/05_final_report.ipynb.
+Run through notebook 05. Observational comparisons and scenario assumptions
+remain distinct from causal evidence or validation of a report.
 """
 
 from collections import defaultdict
@@ -282,7 +279,7 @@ for y in (2023, 2024, 2025, 2026):
     fo[y] = round(100 * d_sum / g_sum, 1)
 results["first_website_order_discount_pct_janaug"] = fo
 
-# Product T11 base: first website purchase Jan 2023 to Aug 2024, 2-year website sales per person
+# Product T11 base: first website purchase from Jan 2023 with 730 complete observation days.
 web_people = defaultdict(list)
 for o in orders:
     if "Online Store" in o["original_channels"] and o["person"] not in (COMPANY, OSCO):
@@ -290,7 +287,7 @@ for o in orders:
 base = []
 for p, os in web_people.items():
     d0 = min(o["date"] for o in os)
-    if date(2023, 1, 1) <= d0 <= date(2024, 8, 31):
+    if date(2023, 1, 1) <= d0 and d0 + timedelta(days=730) <= CUTOFF:
         base.append(sum(o["net"] for o in os if o["date"] <= d0 + timedelta(days=730)))
 results["product_t11_base"] = {"people": len(base), "avg_2y_sales": round(sum(base) / len(base))}
 
@@ -298,7 +295,7 @@ D = {text(r["Code"]): r for r in rows("D")}
 unknown_first = 0
 for p, os in web_people.items():
     f = min(os, key=lambda o: (o["date"], o["order"]))
-    if date(2023, 1, 1) <= f["date"] <= date(2024, 8, 31):
+    if (date(2023, 1, 1) <= f["date"] and f["date"] + timedelta(days=730) <= CUTOFF):
         skus = {
             text(r["Product variant SKU at time of sale"])
             for r in f["rows"]
@@ -307,8 +304,7 @@ for p, os in web_people.items():
         unknown_first += int(not any(s in D for s in skus))
 results["product_t11_base"]["first_order_products_missing_from_D"] = unknown_first
 
-# Year-1 value per newcomer by start channel, Jan to 28 Aug cohorts. Shopee lines after 26 Aug 2025 are
-# divided by 1.09 to take out GST.
+# Year-1 value by start channel. Canonical net already includes the line-level GST correction.
 val = defaultdict(lambda: [0, 0.0])
 for p, os in people_all.items():
     cand = [o for o in os if "Online Store" in o["original_channels"] or o["channel"] == "Shopee"]
@@ -321,7 +317,7 @@ for p, os in people_all.items():
     v = val[f'{f["date"].year}_{start}']
     v[0] += 1
     v[1] += sum(
-        o["net"] / (1.09 if o["channel"] == "Shopee" and o["date"] >= date(2025, 8, 26) else 1.0)
+        o["net"]
         for o in cand
         if o["date"] <= f["date"] + timedelta(days=365)
     )
@@ -376,15 +372,28 @@ gsc = search_console()
 search = {}
 for y in (2024, 2025):
     months = [gsc[(y, m)] for m in range(1, 8) if (y, m) in gsc]
+    if len(months) != 7 or any(not mo["queries"] for mo in months):
+        raise ValueError(f"Incomplete January-July GSC coverage for {y}; do not present a partial sum as seven months.")
     split = defaultdict(float)
+    missing_query_rows = 0
     for mo in months:
-        for q, c in mo["queries"].items():
+        for query_row in mo["query_rows"]:
+            q, c = query_row["query"], query_row["clicks"]
+            if c is None:
+                missing_query_rows += 1
+                continue
             split["brand" if BRAND.search(q) else "product" if PRODUCT.search(q) else "other"] += c
-    search[y] = {"months": len(months), "clicks": round(sum(mo["clicks"] for mo in months)), **{k: round(v) for k, v in split.items()}}
+    search[y] = {
+        "months": len(months), "clicks": round(sum(mo["clicks"] for mo in months)),
+        **{k: round(v) for k, v in split.items()},
+        "query_rows_missing_clicks": missing_query_rows,
+        "query_split_basis": "Only observed numeric clicks among listed queries; unavailable cells excluded, not imputed.",
+        "observed_query_clicks": sum(split.values()),
+    }
 results["search_clicks_janjul"] = search
 
 # Table 11 (Product dimension): two-year website sales per person by what the first website order held, first
-# website purchase 1 January 2023 to 31 August 2024. Each line's kind comes from File D's product type and category.
+# website purchase from 1 January 2023 with 730 complete observation days. Each line's kind comes from File D's product type and category.
 # Packaging and non-stock lines are ignored. A person whose first order holds two or more kinds is "several kinds".
 
 
@@ -414,7 +423,7 @@ def product_kind(d):
 t11 = defaultdict(list)
 for p, os in web_people.items():
     f = min(os, key=lambda o: (o["date"], o["order"]))
-    if not date(2023, 1, 1) <= f["date"] <= date(2024, 8, 31):
+    if not (date(2023, 1, 1) <= f["date"] and f["date"] + timedelta(days=730) <= CUTOFF):
         continue
     skus = {
         text(r["Product variant SKU at time of sale"])

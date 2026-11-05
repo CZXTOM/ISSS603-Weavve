@@ -10,7 +10,9 @@ The checks answer three questions.
    welcome-flow test.
 3. How many people would the parcel card and the welcome flow reach in 2026?
 
-It uses the same Part A rules, hash-checked files and first-year definition as check_recs.py.
+It uses the same verified cleaned dataset and first-year definition as check_recs.py.
+Profile creation is a proxy, not evidence of voluntary signup or marketing consent.
+Group differences are observational, not causal treatment effects.
 
 Run it through notebooks/05_final_report.ipynb.
 """
@@ -24,7 +26,6 @@ from weavve.final.data import order_view, rows, text, day
 
 COMPANY, OSCO = "P000034", "P013881"
 CUTOFF = date(2026, 8, 28)
-GST_FROM = date(2025, 8, 26)
 res = {}
 orders = order_view(drop_cancelled=True, drop_repeated=True, positive_only=True)
 
@@ -34,8 +35,8 @@ def is_web(o):
 
 
 def net(o):
-    # Same as year1_value_per_newcomer: Shopee lines from 26 Aug 2025 are divided by 1.09
-    return o["net"] / (1.09 if o["channel"] == "Shopee" and o["date"] >= GST_FROM else 1.0)
+    # Already corrected at line level in the shared dataset.
+    return o["net"]
 
 
 people = defaultdict(list)

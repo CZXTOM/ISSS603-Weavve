@@ -1,8 +1,7 @@
-"""Checks the Part B inputs that check_recs.py does not cover.
+"""Recompute existing analysis formulas from the verified shared cleaned dataset.
 
-It uses the same Part A rules and hash-checked files as check_recs.py.
-
-Run it through notebooks/05_final_report.ipynb.
+Run through notebook 05. Observational comparisons and scenario assumptions
+remain distinct from causal evidence or validation of a report.
 """
 
 from collections import defaultdict
@@ -153,7 +152,7 @@ all_ads, other_ads = ad_totals(lambda r: True), ad_totals(lambda r: not brand(r)
 web_orders = [
     o["net"] for o in orders if is_web(o) and o["person"] not in (COMPANY, OSCO) and o["date"].year >= 2019
 ]
-funnel = funnel_monthly()
+funnel = [r for r in funnel_monthly() if r["in_transaction_complete_month_window"]]
 res["ad_conversions"] = {
     "value_per_conversion": round(all_ads["Conv. value"] / all_ads["Conversions"], 2),
     "non_brand_conversions_per_click_pct": round(100 * other_ads["Conversions"] / other_ads["Clicks"], 1),

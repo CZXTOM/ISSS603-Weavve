@@ -1,8 +1,10 @@
-"""Turns the check results into the numbers the final report quotes, written as the report prints them.
+"""Format calculated excerpts and compare them with a separately supplied local report.
 
 quotes() rebuilds each quoted number from the check results. compare() looks for each one in the report's Word
 file, which stays in data/ with the Weavve files. The repo is public, so the code never holds the report's
-numbers.
+numbers. These are excerpt checks, not a complete factual or methodological audit.
+Table 11 is matched by product row and metric column; other table excerpts are
+searched within their named table and prose excerpts within the report text.
 
 Profit is extra net sales times the margin, minus any discount cost. The margin is the two thirds implied by
 Weavve's 1.5 floor on return on ad spend (report Section 7.3).
@@ -477,10 +479,14 @@ def _words(element):
 
 
 def report_text(path):
-    """The report's text from its Word file, in full and table by table, keyed by table number."""
+    """Extract local DOCX text and table rows, keyed by the preceding table caption.
+
+    ``table_rows`` preserves cell association for checks that require it. Duplicate
+    captions are rejected rather than silently selecting one of two different tables.
+    """
     with ZipFile(path) as z:
         body = ET.fromstring(z.read("word/document.xml")).find(W + "body")
-    lines, tables, caption = [], {}, None
+    lines, tables, table_rows, caption = [], {}, {}, None
     for element in body:
         if element.tag == W + "p":
             lines.append(_words(element))
@@ -490,8 +496,14 @@ def report_text(path):
             cells = "\n".join(_words(p) for p in element.iter(W + "p"))
             lines.append(cells)
             if caption is not None:
+                if caption in tables:
+                    raise ValueError(f"Duplicate Table {caption} captions; resolve the ambiguous report structure.")
+                table_rows[caption] = [
+                    ["\n".join(_words(p) for p in cell.iter(W + "p")) for cell in row.findall(W + "tc")]
+                    for row in element.findall(W + "tr")
+                ]
                 tables[caption], caption = cells, None
-    return {"all": "\n".join(lines), "tables": tables}
+    return {"all": "\n".join(lines), "tables": tables, "table_rows": table_rows}
 
 
 def _printed(fragment, text):
@@ -502,14 +514,64 @@ def _printed(fragment, text):
     )
 
 
-def compare(q, report):
-    """Quotes that the report does not print word for word.
+TABLE11_LABELS = {
+    "several_kinds": "Two or more kinds of product",
+    "sheet_set": "Bed sheet set only",
+    "duvet_insert": "Duvet insert only",
+    "weighted_blanket": "Weighted blanket only",
+    "fitted_or_flat_sheet": "Fitted or flat sheet only",
+    "duvet_cover": "Duvet cover only",
+    "mattress_protector": "Mattress or pillow protector only",
+    "towel_and_bath": "Towel and bath only",
+    "pillow_or_bolster_case": "Pillow or bolster case only",
+    "other": "Other items only, such as scents and kitchenware",
+}
+TABLE11_COLUMNS = {
+    "label": "First order held", "people": "People",
+    "sales": "Two-year sales per person", "index": "Index",
+}
 
-    A quote named after a table is looked for in that table only.
+
+def _cell_normalized(value):
+    return " ".join(str(value).translate(STRAIGHT).split()).casefold()
+
+
+def _table11_printed(key, fragment, report):
+    """Match one expected metric to one unambiguous product row and header column."""
+    match = re.fullmatch(r"Table 11 ([a-z_]+), (people|sales|index)", key)
+    if not match or match.group(1) not in TABLE11_LABELS:
+        return False
+    group, metric = match.groups()
+    rows = report.get("table_rows", {}).get(11, [])
+    headers = {name: _cell_normalized(label) for name, label in TABLE11_COLUMNS.items()}
+    normalized = [[_cell_normalized(cell) for cell in row] for row in rows]
+    header_rows = [row for row in normalized if all(row.count(label) == 1 for label in headers.values())]
+    if len(header_rows) != 1:
+        return False
+    positions = {name: header_rows[0].index(label) for name, label in headers.items()}
+    label = _cell_normalized(TABLE11_LABELS[group])
+    matching = [row for row in normalized if len(row) > positions["label"] and row[positions["label"]] == label]
+    return (
+        len(matching) == 1
+        and len(matching[0]) > positions[metric]
+        and matching[0][positions[metric]] == _cell_normalized(fragment)
+    )
+
+
+def compare(q, report):
+    """Return missing or mismatched calculated excerpts; this is not a full fact check.
+
+    Table 11 product metrics require the correct row and column. Other quotes
+    named after a table are searched only in that table; prose is searched in the
+    full report. A match does not validate denominators, sources or interpretation.
     """
     missing = {}
     for key, fragment in q.items():
         m = re.match(r"Table (\d+) ", key)
+        if m and int(m.group(1)) == 11:
+            if not _table11_printed(key, fragment, report):
+                missing[key] = fragment
+            continue
         text = report["tables"].get(int(m.group(1)), "") if m else report["all"]
         if not _printed(fragment, text):
             missing[key] = fragment
