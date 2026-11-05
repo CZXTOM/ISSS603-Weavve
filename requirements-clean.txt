@@ -1,0 +1,2 @@
+# Tested with Python 3.12.10. This reader version is part of the dataset identity.
+openpyxl==3.1.5

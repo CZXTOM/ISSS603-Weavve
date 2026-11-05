@@ -20,3 +20,14 @@ venv/
 
 # Mac
 .DS_Store
+
+# Private generated artifacts
+clean/
+*.tsv
+*.pickle
+*.pdf
+*.docx
+*.png
+*.jpg
+*.jpeg
+*.html
