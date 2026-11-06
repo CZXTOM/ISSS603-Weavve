@@ -54,6 +54,7 @@ when code, input files or dataset selection changes. Never commit executed copie
 | `12_clean_promotion` | Discount and voucher summaries with explicit scope |
 | `13_clean_search` | Selected GSC months, Semrush freshness and historical ads inputs |
 | `05_final_report` | Recompute existing Part B formulas and figures from the same tables |
+| `06_recommendation_checks` | Check equal follow-up, initial-purchase timing and matched funnel periods; optionally evaluate private planning assumptions |
 
 Notebooks `00` to `03` are historical raw-data exploration. Their outputs are not the shared cleaned dataset.
 No historical cache is required to run notebook 04 or the current analyses.
@@ -62,6 +63,22 @@ Notebook 05 retains a frozen analysis window and observational/scenario assumpti
 excerpts with an explicitly selected local Word file through `WEAVVE_REPORT`. It does not access online
 reports, discover a latest draft, or prove every claim. Optional local ads snapshots are needed for Section 10;
 missing evidence is reported as skipped. Table 11 comparisons require the matching row and metric column.
+
+Notebook 06 is an independent recommendation review. It does not certify unavailable business-team
+scripts or launch an experiment. Its [methodology](docs/recommendation_validation.md) and
+[experiment protocols](docs/experiment_protocols.md) separate historical findings, conditional
+economics and business inputs still needed. Run the same checks without Jupyter:
+
+```powershell
+python scripts/check_recommendations.py
+# Optional: explicit private assumptions; see docs/planning_assumptions.md.
+python scripts/check_recommendations.py --scenario "C:\private\planning-assumptions.json"
+```
+
+Results go under `WEAVVE_OUT/recommendation_checks/` and are rejected inside any Git checkout.
+No default profit forecast is supplied. [Planning assumptions](docs/planning_assumptions.md) must
+include zero/adverse cases and unpriced costs. Neither local checks nor planning arithmetic establishes
+live checkout behaviour, a current eligible audience, a treatment effect or permission to launch.
 
 ## Validation and commits
 
