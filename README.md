@@ -55,6 +55,7 @@ when code, input files or dataset selection changes. Never commit executed copie
 | `13_clean_search` | Selected GSC months, Semrush freshness and historical ads inputs |
 | `05_final_report` | Recompute existing Part B formulas and figures from the same tables |
 | `06_recommendation_checks` | Check equal follow-up, initial-purchase timing and matched funnel periods; optionally evaluate private planning assumptions |
+| `07_recommendation_evidence` | Generate corrected Idea 1 claim evidence, fixed-roster profit scenarios and optional dated Ads results |
 
 Notebooks `00` to `03` are historical raw-data exploration. Their outputs are not the shared cleaned dataset.
 No historical cache is required to run notebook 04 or the current analyses.
@@ -79,6 +80,25 @@ Results go under `WEAVVE_OUT/recommendation_checks/` and are rejected inside any
 No default profit forecast is supplied. [Planning assumptions](docs/planning_assumptions.md) must
 include zero/adverse cases and unpriced costs. Neither local checks nor planning arithmetic establishes
 live checkout behaviour, a current eligible audience, a treatment effect or permission to launch.
+
+## Final recommendation evidence
+
+[The evidence contract](docs/recommendation_evidence.md) connects the Idea 1 calculations to
+the verified shared tables and defines the rebuilt [cart-completion proposal](docs/idea2_cart_completion.md).
+It retains early-order value, matches entry seasons, labels profile linkage accurately and
+uses a separate historical risk set for the proposed post-purchase test.
+
+```powershell
+python scripts/build_recommendation_evidence.py
+# Optional private profit inputs and dated campaign snapshots:
+python scripts/build_recommendation_evidence.py --idea1-scenario "C:\private\idea1-planning.json" --cart-scenario "C:\private\idea2-planning.json" --ads-dir "C:\private\ads-snapshots"
+```
+
+The two `analysis/idea1/` entry points call the same runner. No independent clean Excel
+workbooks or hidden source-prefix execution are required. Results and claim registers remain
+private; the repository supplies no company financial inputs or automatic profit forecast.
+The [earned-reward reminder protocol](docs/idea2_reward_test.md) is retained as a deferred
+option requiring current member/reward linkage and a defensible financial case.
 
 ## Validation and commits
 

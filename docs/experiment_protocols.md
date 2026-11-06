@@ -1,5 +1,11 @@
 # Checkout audit and experiment protocols
 
+The final recommendation entry points are now documented in
+[recommendation evidence](recommendation_evidence.md), including the corrected
+post-purchase risk set and [cart-completion proposal](idea2_cart_completion.md).
+The prospect/member designs below remain methodological references, rather than
+claims that those earlier populations are the final selected recommendations.
+
 **Status: prepared; not launched.** No live customer allocation, campaign change,
 discount activation or operational audit result is recorded here. The shared notebook
 checks historical definitions; it does not execute these experiments.

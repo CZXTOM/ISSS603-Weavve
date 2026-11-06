@@ -17,11 +17,13 @@ from weavve.clean import load_dataset
 from weavve.final.experiment_design import evaluate_scenario
 from weavve.final.recommendations import build_recommendation_checks
 from weavve.paths import OUT
+from weavve.private_outputs import private_output_directory, write_private_json
 
 
 def build_report(dataset=None, scenario_path=None):
     dataset = dataset if dataset is not None else load_dataset()
     code_files = ["src/weavve/final/recommendations.py", "src/weavve/final/experiment_design.py",
+                  "src/weavve/private_outputs.py",
                   "scripts/check_recommendations.py"]
     inventory = {name: sha256((ROOT / name).read_bytes()).hexdigest() for name in code_files}
     commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True)
@@ -42,25 +44,10 @@ def build_report(dataset=None, scenario_path=None):
     return report
 
 
-def private_output_directory(path):
-    candidate = Path(path).expanduser().resolve()
-    # Worktrees use a .git file; ordinary checkouts use a .git directory.
-    # Checking every ancestor also rejects a nested output beneath another repo.
-    if any((ancestor / ".git").exists() for ancestor in [candidate, *candidate.parents]):
-        raise ValueError("Recommendation outputs must be outside every Git checkout")
-    return candidate
-
-
 def write_report(report, out_dir=None):
     dataset_id = report["checks"]["dataset_id"]
-    folder = private_output_directory(out_dir if out_dir is not None else OUT / "recommendation_checks" / dataset_id)
-    folder.mkdir(parents=True, exist_ok=True)
-    destination = folder / "recommendation_checks.json"
-    if destination.is_symlink() or destination.resolve() != destination:
-        raise ValueError("Recommendation output must not be a redirected file")
-    private_output_directory(destination.resolve().parent)
-    destination.write_text(json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False) + "\n", encoding="utf-8")
-    return destination
+    folder = out_dir if out_dir is not None else OUT / "recommendation_checks" / dataset_id
+    return write_private_json(report, folder, "recommendation_checks.json")
 
 
 def main(argv=None):
