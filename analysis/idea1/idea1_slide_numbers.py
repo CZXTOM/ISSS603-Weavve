@@ -6,6 +6,7 @@ Years run Sep to Aug and are named by the year they end in:
 A newcomer is a person whose first ever purchase was on the website.
 Margin 60% is assumed (Weavve gave none). Meta cost per new customer $100 to $300 is from Weavve's case deck.
 Set-up costs $1,000 (emails) and $500 (whole-bed photos) are estimates.
+The sheet breakdown (slides 3 to 5) joins File C lines to File D by SKU for the item, fabric, colour and size.
 
 Needs idea1_v8.py in the same folder. Reads ~/Desktop/Weavve_Clean_Data (or SRC_DIR).
 Writes ~/Desktop/idea1_slide_numbers.csv (or OUT_CSV).
@@ -113,6 +114,69 @@ put(5, "Opp 2 gross profit $", round(gp2), "AOV")
 put(5, "Total gross profit $", round(gp1 + gp2))
 put(5, "After $1,500 set-up $", round(gp1 + gp2 - 1500))
 put(5, "Back for every $1 of set-up", round((gp1 + gp2) / 1500, 2))
+
+
+# ---------- Sheet breakdown: item bought first, what comes next (slides 3, 4 and 5) ----------
+D = pd.read_excel(os.path.join(DIR, "D_Products_clean.xlsx"))
+SET_NAMES = {"Classic Set", "Fitted Sheet Set", "Deluxe Set", "Duvet Cover Set"}
+def item(r):
+    if r.category == "1. Bedsheets":
+        if r.product_type == "Set":
+            return "Set"
+        return {"Fitted Sheet": "Fitted sheet", "Duvet Cover": "Duvet cover", "Flat Sheet": "Flat or cot sheet", "Cot sheet": "Flat or cot sheet",
+                "pillow case": "Pillowcases", "bolster": "Pillowcases"}.get(r.product_type, "Other sheets")
+    return {"quilt": "Weighted blanket", "duvet": "Duvet insert", "Mattress Protectors": "Mattress protector", "pillow": "Pillow",
+            "Blankets": "Waffle blanket"}.get(r.product_type, "Other bedding")
+bl = L[(L.sale_or_refund == "order") & ~L.order_level_row & L.category.isin(["1. Bedsheets", "2. Bedding"])].merge(
+    D[["sku", "option_1", "option_2"]], on="sku", how="left")
+bl["item"] = bl.apply(item, axis=1)
+def fabric(z):   # fabric range from File D sub-category, Scene Shang collab is Signature TENCEL
+    z = str(z)
+    return "Signature TENCEL" if ("STC" in z or "Scene Shang" in z) else "Everyday TENCEL" if "ETC" in z else "Cotton" if ("Cotton" in z or "CT" in z) else None
+bl["fabric"] = np.where(bl.category == "1. Bedsheets", bl.sub_category.map(fabric), None)
+bl["colour"] = bl.option_2.where(bl.category == "1. Bedsheets")
+bl["size"] = bl.option_1.where(bl.category == "1. Bedsheets")
+fo = bl[bl.order_id.isin(nw.order_id)]
+fi = fo.groupby("order_id").item.agg(set)
+def first_group(z):
+    if not isinstance(z, set): return None
+    if "Set" in z: return "Sheet set"
+    if "Fitted sheet" in z: return "Fitted sheet"
+    if "Duvet cover" in z: return "Duvet cover"
+    if "Pillowcases" in z: return "Pillowcases only"
+    return "Flat or cot sheet"
+nw["sg"] = nw.order_id.map(fi).map(first_group).where(nw.sf)
+GROUPS = ["Sheet set", "Fitted sheet", "Duvet cover", "Pillowcases only"]
+c["sg"] = nw.sg.reindex(c.index)
+l26s = nw[(nw.w == "W3") & nw.on_list & nw.sf]
+for g_ in GROUPS:
+    d = c[c.sg == g_]
+    put(3, f"Back within 2 years, {g_} %", round(100 * d.back2.mean(), 1), f"{len(d)} starters Sep 2022 to Aug 2024")
+put(3, "Back within 2 years, other newcomers %", round(100 * c[~c.sf].back2.mean(), 1), f"{int((~c.sf).sum())} starters Sep 2022 to Aug 2024")
+for kk in ["Sheet set only", "Sheet separates only", "Whole bed"]:
+    d = sr[sr.person_id.map(c.entry) == kk]
+    put(3, f"Second order includes sheets, first order {kk} %", round(100 * d.cats.apply(lambda z: "1. Bedsheets" in z).mean(), 1), f"{len(d)} returners")
+so = bl[bl.order_id.isin(sr.order_id)]
+p1 = fo[(fo.category == "1. Bedsheets") & fo.person_id.isin(sr.person_id)]
+p2 = so[so.category == "1. Bedsheets"]
+for col, nm in [("fabric", "same fabric"), ("colour", "same colour"), ("size", "same size")]:
+    a_ = p1.dropna(subset=[col]).groupby("person_id")[col].agg(set); b_ = p2.dropna(subset=[col]).groupby("person_id")[col].agg(set)
+    both = a_.index.intersection(b_.index)
+    put(3, f"Returning sheet starters who buy sheets again, {nm} %", round(100 * np.mean([bool(a_[i] & b_[i]) for i in both]), 1), f"{len(both)} people with it known")
+sec_g = sec.reindex(c[c.sf].index).dropna()
+si2 = so.groupby("order_id").item.agg(set)
+r2g = sr.assign(items2=sr.order_id.map(si2).apply(lambda z: z if isinstance(z, set) else set()), sg=sr.person_id.map(c.sg))
+NEXT = {"Sheet set": ("Set", "another set"), "Fitted sheet": ("Pillowcases", "pillowcases"), "Duvet cover": ("Duvet cover", "another duvet cover"),
+        "Pillowcases only": ("Set", "a set")}
+for g_ in GROUPS:
+    s_ = sec_g[sec_g.index.isin(c[c.sg == g_].index)]
+    put(4, f"Second orders day 19 to 1 year, {g_} %", round(100 * ((s_ > 18) & (s_ < 365)).mean(), 1), f"{len(s_)} returners")
+    d = r2g[r2g.sg == g_]; it_, lab_ = NEXT[g_]
+    put(4, f"Next order has {lab_}, first order {g_} %", round(100 * d.items2.apply(lambda z: it_ in z).mean(), 1), f"{len(d)} returners, 2 years")
+    put(5, f"Share of 2026 sheet starters, {g_} %", round(100 * (l26s.sg == g_).mean(), 1), f"{len(l26s)} sheet starters on the email list")
+wbo = fo[fo.order_id.isin(nw[nw.w.isin(["W2", "W3"]) & nw.wb].order_id) & (fo.category == "2. Bedding")].groupby("order_id").item.agg(set)
+for it_ in ["Duvet insert", "Weighted blanket", "Mattress protector"]:
+    put(5, f"Whole-bed first orders 2025 to 2026 with a {it_.lower()} %", round(100 * wbo.apply(lambda z: it_ in z).mean(), 1), f"{len(wbo)} orders")
 
 out = pd.DataFrame(rows)
 pd.set_option("display.max_colwidth", 70)
