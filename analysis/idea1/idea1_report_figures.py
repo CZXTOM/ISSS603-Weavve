@@ -87,7 +87,7 @@ w2 = nw[nw.w == "W2"]
 vals = [("Whole bed", w2[w2.wb].net.mean(), OLIVE), ("Sheets only", w2[w2.entry.isin(["Sheet set only", "Sheet separates only"])].net.mean(), BLUE),
         ("Any other", w2[~w2.wb].net.mean(), GREY)]
 a1.bar([v[0] for v in vals], [v[1] for v in vals], color=[v[2] for v in vals], width=0.6)
-for i, v in enumerate(vals): a1.text(i, v[1] + 10, f"${int(v[1] + 0.51)}", ha="center", fontweight="bold", color=DARK)
+for i, v in enumerate(vals): a1.text(i, v[1] + 10, f"${v[1]:.0f}", ha="center", fontweight="bold", color=DARK)
 a1.set_ylabel("Average first order, $"); a1.set_title("First order, 2025 newcomers", fontsize=12); a1.set_ylim(0, 640)
 yrs = ["W1", "W2", "W3"]; lab = ["2024", "2025", "2026"]
 for flag, nm, col in [(True, "With a welcome code", BROWN), (False, "Without a welcome code", GREY)]:
