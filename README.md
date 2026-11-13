@@ -97,6 +97,9 @@ python scripts/build_recommendation_evidence.py --idea1-scenario "C:\private\ide
 The two `analysis/idea1/` entry points call the same runner. No independent clean Excel
 workbooks or hidden source-prefix execution are required. Results and claim registers remain
 private; the repository supplies no company financial inputs or automatic profit forecast.
+`analysis/idea2/idea2_size.py` reproduces the Idea 2 size of the prize in report section 7.7 and slide 8,
+using the same cleaned workbooks as the Idea 1 scripts.
+
 The [earned-reward reminder protocol](docs/idea2_reward_test.md) is retained as a deferred
 option requiring current member/reward linkage and a defensible financial case.
 
