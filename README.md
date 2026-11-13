@@ -56,9 +56,16 @@ when code, input files or dataset selection changes. Never commit executed copie
 | `05_final_report` | Recompute existing Part B formulas and figures from the same tables |
 | `06_recommendation_checks` | Check equal follow-up, initial-purchase timing and matched funnel periods; optionally evaluate private planning assumptions |
 | `07_recommendation_evidence` | Generate corrected Idea 1 claim evidence, fixed-roster profit scenarios and optional dated Ads results |
+| `08_idea2_snooze_club` | Recompute Idea 2 pop-up code routes, website value/return, reward use, member-linked timing and illustrative voucher break-even |
 
 Notebooks `00` to `03` are historical raw-data exploration. Their outputs are not the shared cleaned dataset.
 No historical cache is required to run notebook 04 or the current analyses.
+
+Notebook 08 uses the verified canonical dataset with the report snapshot ending 28 August 2026.
+It keeps sales associations, website-buyer cohorts and historical member-linked samples separate.
+Its fixed-redemption voucher examples are planning assumptions, not measured lift or annual profit.
+It does not require local report files or prior analysis outputs. The existing
+`analysis/idea2/idea2_size.py` uses separate cleaned Excel inputs and a different model.
 
 Notebook 05 retains a frozen analysis window and observational/scenario assumptions. It optionally compares
 excerpts with an explicitly selected local Word file through `WEAVVE_REPORT`. It does not access online
